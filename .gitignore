@@ -1,0 +1,16 @@
+# STM32CubeIDE build outputs
+Debug/
+Release/
+
+# Eclipse workspace metadata
+.metadata/
+
+# Local IDE settings
+.settings/
+
+# Debug launch configurations
+*.launch
+
+# Temporary files
+*.swp
+*~
