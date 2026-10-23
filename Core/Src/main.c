@@ -21,7 +21,10 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "flash_storage.h"
+#include "w25q64.h"
 #include <string.h>
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -44,6 +47,8 @@
 
 /* Private variables ---------------------------------------------------------*/
 
+SPI_HandleTypeDef hspi1;
+
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
@@ -54,12 +59,16 @@ static char rx_buffer[UART_RX_BUFFER_SIZE];
 static uint16_t rx_index = 0;
 
 static uint8_t rx_overflow = 0;
+
+static uint8_t flash_id[3];
+static char flash_message[80];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_SPI1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -127,17 +136,47 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
+  MX_SPI1_Init();
   /* USER CODE BEGIN 2 */
   UART_SendText("Storage Controller READY\r\n");
   UART_SendText("Type HELP for commands.\r\n");
 
-  //uint8_t msg[] = "Storage Controller READY\r\n";
+  UART_SendText("\r\nW25Q64FV SPI Test\r\n");
 
-  HAL_UART_Transmit(&huart2, msg, sizeof(msg) - 1, 1000);
+  HAL_StatusTypeDef flash_status =
+      W25Q64_ReadJEDECID(flash_id);
+
+  if (flash_status == HAL_OK)
+  {
+      snprintf(flash_message,
+               sizeof(flash_message),
+               "JEDEC ID: %02X %02X %02X\r\n",
+               flash_id[0],
+               flash_id[1],
+               flash_id[2]);
+
+      UART_SendText(flash_message);
+
+      if (flash_id[0] == 0xEF &&
+          flash_id[1] == 0x40 &&
+          flash_id[2] == 0x17)
+      {
+          UART_SendText("W25Q64FV detected!\r\n");
+      }
+      else
+      {
+          UART_SendText("Unexpected JEDEC ID\r\n");
+      }
+  }
+  else
+  {
+      UART_SendText("SPI communication error\r\n");
+  }
+
   /* USER CODE END 2 */
 
   /* Initialize leds */
-  BSP_LED_Init(LED2);
+  //BSP_LED_Init(LED2);
 
   /* Initialize USER push-button, will be used to trigger an interrupt each time it's pressed.*/
   BSP_PB_Init(BUTTON_USER, BUTTON_MODE_EXTI);
@@ -146,51 +185,51 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-//	  HAL_StatusTypeDef status;
-//
-//	  status = HAL_UART_Receive(&huart2,
-//	                            &rx_byte,
-//	                            1,
-//	                            UART_RX_TIMEOUT_MS);
-//
-//	  if (status == HAL_OK)
-//	  {
-//	      if (rx_byte == '\r' || rx_byte == '\n')
-//	      {
-//	          if (rx_overflow)
-//	          {
-//	              UART_SendText("ERROR: Input too long\r\n");
-//	          }
-//	          else if (rx_index > 0)
-//	          {
-//	              rx_buffer[rx_index] = '\0';
-//
-//	              UART_ProcessCommand(rx_buffer);
-//	          }
-//
-//	          rx_index = 0;
-//	          rx_overflow = 0;
-//	      }
-//	      else if (!rx_overflow)
-//	      {
-//	          if (rx_index < UART_RX_BUFFER_SIZE - 1)
-//	          {
-//	              rx_buffer[rx_index++] = (char)rx_byte;
-//	          }
-//	          else
-//	          {
-//	              rx_overflow = 1;
-//	          }
-//	      }
-//	  }
-//	  else if (status != HAL_TIMEOUT)
-//	  {
-//	      Error_Handler();
-//	  }
+
+      HAL_StatusTypeDef status;
+
+      status = HAL_UART_Receive(&huart2,
+                                &rx_byte,
+                                1,
+                                UART_RX_TIMEOUT_MS);
+
+      if (status == HAL_OK)
+      {
+          if (rx_byte == '\r' || rx_byte == '\n')
+          {
+              if (rx_overflow)
+              {
+                  UART_SendText("ERROR: Input too long\r\n");
+              }
+              else if (rx_index > 0)
+              {
+                  rx_buffer[rx_index] = '\0';
+
+                  UART_ProcessCommand(rx_buffer);
+              }
+
+              rx_index = 0;
+              rx_overflow = 0;
+          }
+          else if (!rx_overflow)
+          {
+              if (rx_index < UART_RX_BUFFER_SIZE - 1U)
+              {
+                  rx_buffer[rx_index++] = (char)rx_byte;
+              }
+              else
+              {
+                  rx_overflow = 1;
+              }
+          }
+      }
+      else if (status != HAL_TIMEOUT)
+      {
+          Error_Handler();
+      }
   }
   /* USER CODE END 3 */
 }
@@ -243,6 +282,44 @@ void SystemClock_Config(void)
 }
 
 /**
+  * @brief SPI1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_SPI1_Init(void)
+{
+
+  /* USER CODE BEGIN SPI1_Init 0 */
+
+  /* USER CODE END SPI1_Init 0 */
+
+  /* USER CODE BEGIN SPI1_Init 1 */
+
+  /* USER CODE END SPI1_Init 1 */
+  /* SPI1 parameter configuration*/
+  hspi1.Instance = SPI1;
+  hspi1.Init.Mode = SPI_MODE_MASTER;
+  hspi1.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi1.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi1.Init.CLKPolarity = SPI_POLARITY_LOW;
+  hspi1.Init.CLKPhase = SPI_PHASE_1EDGE;
+  hspi1.Init.NSS = SPI_NSS_SOFT;
+  hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+  hspi1.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi1.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi1.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi1.Init.CRCPolynomial = 10;
+  if (HAL_SPI_Init(&hspi1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN SPI1_Init 2 */
+
+  /* USER CODE END SPI1_Init 2 */
+
+}
+
+/**
   * @brief USART2 Initialization Function
   * @param None
   * @retval None
@@ -282,6 +359,7 @@ static void MX_USART2_UART_Init(void)
   */
 static void MX_GPIO_Init(void)
 {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
   /* USER CODE BEGIN MX_GPIO_Init_1 */
 
   /* USER CODE END MX_GPIO_Init_1 */
@@ -291,6 +369,16 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(FLASH_CS_GPIO_Port, FLASH_CS_Pin, GPIO_PIN_SET);
+
+  /*Configure GPIO pin : FLASH_CS_Pin */
+  GPIO_InitStruct.Pin = FLASH_CS_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(FLASH_CS_GPIO_Port, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
