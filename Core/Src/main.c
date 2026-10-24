@@ -25,6 +25,7 @@
 #include "w25q64.h"
 #include <string.h>
 #include <stdio.h>
+#include "flash_tests.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -94,8 +95,19 @@ static void UART_ProcessCommand(const char *command)
     }
     else if (strcmp(command, "HELP") == 0)
     {
-        UART_SendText("Commands: PING, HELP\r\n");
-        UART_SendText("Other text will be echoed.\r\n");
+    	UART_SendText("Commands:\r\n");
+    	UART_SendText("PING\r\n");
+    	UART_SendText("HELP\r\n");
+    	UART_SendText("FLASH_TEST_READ\r\n");
+    	UART_SendText("FLASH_TEST_WRITE YES (DESTRUCTIVE)\r\n");
+    }
+    else if (strcmp(command, "FLASH_TEST_WRITE YES") == 0)
+    {
+        FlashTests_RunWriteErase();
+    }
+    else if (strcmp(command, "FLASH_TEST_READ") == 0)
+    {
+        FlashTests_CheckPersistence();
     }
     else
     {
@@ -137,40 +149,45 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   MX_SPI1_Init();
+
   /* USER CODE BEGIN 2 */
+
   UART_SendText("Storage Controller READY\r\n");
   UART_SendText("Type HELP for commands.\r\n");
+  /* Run physical flash validation */
+  FlashTests_RunAll();
+  /* Phase 3.6 - Storage API Test */
 
-  UART_SendText("\r\nW25Q64FV SPI Test\r\n");
+  UART_SendText("\r\n--- STORAGE API TEST ---\r\n");
 
-  HAL_StatusTypeDef flash_status =
-      W25Q64_ReadJEDECID(flash_id);
-
-  if (flash_status == HAL_OK)
+  if (Flash_Init() == FLASH_OK)
   {
-      snprintf(flash_message,
-               sizeof(flash_message),
-               "JEDEC ID: %02X %02X %02X\r\n",
-               flash_id[0],
-               flash_id[1],
-               flash_id[2]);
+      UART_SendText("Storage Init: PASSED\r\n");
 
-      UART_SendText(flash_message);
+      uint8_t buffer[4] = {0};
 
-      if (flash_id[0] == 0xEF &&
-          flash_id[1] == 0x40 &&
-          flash_id[2] == 0x17)
+      if (Flash_Read(W25Q64_TEST_SECTOR_ADDR,
+                     buffer,
+                     sizeof(buffer)) == FLASH_OK)
       {
-          UART_SendText("W25Q64FV detected!\r\n");
+          snprintf(flash_message,
+                   sizeof(flash_message),
+                   "Storage Read: %02X %02X %02X %02X\r\n",
+                   buffer[0],
+                   buffer[1],
+                   buffer[2],
+                   buffer[3]);
+
+          UART_SendText(flash_message);
       }
       else
       {
-          UART_SendText("Unexpected JEDEC ID\r\n");
+          UART_SendText("Storage Read: FAILED\r\n");
       }
   }
   else
   {
-      UART_SendText("SPI communication error\r\n");
+      UART_SendText("Storage Init: FAILED\r\n");
   }
 
   /* USER CODE END 2 */
